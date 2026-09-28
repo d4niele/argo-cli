@@ -37,7 +37,7 @@ elettronico **Argo DidUp Famiglia**, senza passare dal browser o dall'app.
 
 ```bash
 git clone <url-di-questo-repo>
-cd skdid
+cd argo-cli
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 ```
@@ -119,7 +119,7 @@ coinvolte, e `gruppi` con il dettaglio ordinato cronologicamente.
 Per lanciarlo più velocemente, aggiungi in `~/.bash_aliases`:
 
 ```bash
-alias didup='/percorso/assoluto/skdid/.venv/bin/python /percorso/assoluto/skdid/argo_cli.py'
+alias didup='/percorso/assoluto/argo-cli/.venv/bin/python /percorso/assoluto/argo-cli/argo_cli.py'
 ```
 
 Poi, da un nuovo terminale:
