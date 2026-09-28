@@ -38,6 +38,18 @@ elettronico **Argo DidUp Famiglia**, senza passare dal browser o dall'app.
 ```bash
 git clone <url-di-questo-repo>
 cd argo-cli
+```
+
+Con **virtualenvwrapper** (consigliato):
+
+```bash
+mkvirtualenv argo
+pip install -r requirements.txt
+```
+
+In alternativa con venv standard:
+
+```bash
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 ```
@@ -117,6 +129,14 @@ coinvolte, e `gruppi` con il dettaglio ordinato cronologicamente.
 ## Alias da shell (opzionale)
 
 Per lanciarlo più velocemente, aggiungi in `~/.bash_aliases`:
+
+Con **virtualenvwrapper**:
+
+```bash
+alias didup="$HOME/.virtualenvs/argo/bin/python $HOME/projects/argo-cli/argo_cli.py"
+```
+
+Con **venv standard**:
 
 ```bash
 alias didup='/percorso/assoluto/argo-cli/.venv/bin/python /percorso/assoluto/argo-cli/argo_cli.py'
