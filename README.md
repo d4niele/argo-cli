@@ -1,4 +1,4 @@
-# skdid — Argo DidUp da riga di comando
+# argo-cli — Argo DidUp da riga di comando
 
 Piccola CLI Python per consultare da terminale voti, compiti, promemoria,
 comunicazioni di bacheca, assenze e note disciplinari del registro
