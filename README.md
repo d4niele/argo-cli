@@ -96,6 +96,23 @@ Combinabili tra loro:
 .venv/bin/python argo_cli.py --promemoria --bacheca --assenze --note
 ```
 
+### Tutto in una volta
+
+```bash
+.venv/bin/python argo_cli.py --all
+```
+
+Abilita tutte le sezioni opzionali e aggiunge: **fuori classe**, **bacheca alunno**,
+**periodi scolastici** (con media di scrutinio), **media generale** e **elenco docenti**.
+Usa una sola chiamata API (`get_dashboard`), quindi è più veloce di attivare i flag singolarmente.
+
+Combinabile con `--json`, `--per-materia` e `--dal`/`--al`:
+
+```bash
+.venv/bin/python argo_cli.py --all --json
+.venv/bin/python argo_cli.py --all --dal 01-09-2026 --al 30-09-2026
+```
+
 ### Intervallo di date personalizzato
 
 ```bash

@@ -273,6 +273,64 @@ def raccogli_note(note: list, inizio: date, fine: date) -> list[tuple[date, str,
     return voci
 
 
+def raccogli_fuori_classe(fuori_classe: list, inizio: date, fine: date) -> list[tuple[date, str, str]]:
+    voci = []
+    for f in fuori_classe:
+        giorno = parse_data(f.data)
+        if giorno is None or not (inizio <= giorno <= fine):
+            continue
+        testo = f.descrizione
+        if f.nota:
+            testo += f" ({f.nota})"
+        if f.frequenza_on_line:
+            testo += " [online]"
+        voci.append((giorno, f.docente or "—", testo))
+    return voci
+
+
+def raccogli_bacheca_alunno(bacheca_alunno: list, inizio: date, fine: date) -> list[tuple[date, str, str]]:
+    voci = []
+    for f in bacheca_alunno:
+        giorno = parse_data(f.data)
+        if giorno is None or not (inizio <= giorno <= fine):
+            continue
+        testo = f.messaggio if f.messaggio else f.nome_file
+        if f.flg_download_genitore and not f.is_presa_visione:
+            testo += " [da scaricare]"
+        voci.append((giorno, "Allegato", testo))
+    return voci
+
+
+def stampa_periodi(periodi: list, media_generale: float | None) -> None:
+    if not periodi and media_generale is None:
+        return
+    print("\n=== Periodi scolastici ===")
+    if media_generale is not None:
+        print(f"Media generale: {media_generale:.2f}\n")
+    for p in periodi:
+        _di = parse_data(p.data_inizio)
+        _df = parse_data(p.data_fine)
+        inizio = fmt(_di) if _di else "?"
+        fine = fmt(_df) if _df else "?"
+        riga = f"  {p.descrizione} ({inizio} – {fine})"
+        if p.media_scrutinio is not None:
+            riga += f"  media scrutinio: {p.media_scrutinio:.2f}"
+        print(riga)
+
+
+def stampa_docenti(docenti: list) -> None:
+    if not docenti:
+        return
+    print("\n=== Docenti ===")
+    for d in sorted(docenti, key=lambda x: x.des_cognome):
+        nome = f"{d.des_cognome} {d.des_nome}".strip()
+        materie = ", ".join(d.materie) if d.materie else "—"
+        riga = f"  {nome}  →  {materie}"
+        if d.des_email:
+            riga += f"  <{d.des_email}>"
+        print(riga)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Consulta voti e compiti su Argo DidUp Famiglia."
@@ -319,7 +377,22 @@ def main() -> None:
         action="store_true",
         help="Includi le note disciplinari (default: ultimi 30 giorni).",
     )
+    parser.add_argument(
+        "--all",
+        action="store_true",
+        help=(
+            "Mostra tutto: compiti, voti, promemoria, bacheca, assenze, note, "
+            "fuori classe, bacheca alunno, periodi, media e docenti. "
+            "Usa una sola chiamata API (get_dashboard)."
+        ),
+    )
     args = parser.parse_args()
+
+    if args.all:
+        args.promemoria = True
+        args.bacheca = True
+        args.assenze = True
+        args.note = True
 
     if bool(args.dal) != bool(args.al):
         parser.error("--dal e --al vanno usati insieme")
@@ -331,12 +404,31 @@ def main() -> None:
 
     try:
         with DiDUPClientSync(scuola, utente, password, auto_versione=True) as didup:
-            voti = didup.get_voti()
-            registro = didup.get_registro()
-            promemoria = didup.get_promemoria() if args.promemoria else []
-            bacheca = didup.get_bacheca() if args.bacheca else []
-            assenze = didup.get_assenze() if args.assenze else []
-            note = didup.get_note_disciplinari() if args.note else []
+            if args.all:
+                dashboard = didup.get_dashboard()
+                voti = dashboard.voti
+                registro = dashboard.registro
+                promemoria = dashboard.promemoria
+                bacheca = dashboard.bacheca
+                assenze = dashboard.appello
+                note = dashboard.note_disciplinari
+                fuori_classe_raw = dashboard.fuori_classe
+                bacheca_alunno_raw = dashboard.bacheca_alunno
+                docenti_raw = dashboard.lista_docenti_classe
+                periodi_raw = dashboard.lista_periodi
+                media_generale = dashboard.media_generale
+            else:
+                voti = didup.get_voti()
+                registro = didup.get_registro()
+                promemoria = didup.get_promemoria() if args.promemoria else []
+                bacheca = didup.get_bacheca() if args.bacheca else []
+                assenze = didup.get_assenze() if args.assenze else []
+                note = didup.get_note_disciplinari() if args.note else []
+                fuori_classe_raw = []
+                bacheca_alunno_raw = []
+                docenti_raw = []
+                periodi_raw = []
+                media_generale = None
     except AuthError:
         print("Credenziali non valide o accesso rifiutato.", file=sys.stderr)
         sys.exit(1)
@@ -427,6 +519,30 @@ def main() -> None:
             ),
             "docente",
         ))
+    if fuori_classe_raw:
+        sezioni.append((
+            "Fuori classe",
+            costruisci_sezione(
+                inizio_mensile,
+                fine_mensile,
+                raccogli_fuori_classe(fuori_classe_raw, inizio_mensile, fine_mensile),
+                args.per_materia,
+                "docente",
+            ),
+            "docente",
+        ))
+    if bacheca_alunno_raw:
+        sezioni.append((
+            "Bacheca alunno",
+            costruisci_sezione(
+                inizio_settimanale,
+                fine_settimanale,
+                raccogli_bacheca_alunno(bacheca_alunno_raw, inizio_settimanale, fine_settimanale),
+                args.per_materia,
+                "categoria",
+            ),
+            "categoria",
+        ))
 
     if args.json:
         chiave_json = {
@@ -436,19 +552,43 @@ def main() -> None:
             "Bacheca": "bacheca",
             "Assenze/ritardi": "assenze",
             "Note disciplinari": "note",
+            "Fuori classe": "fuori_classe",
+            "Bacheca alunno": "bacheca_alunno",
         }
-        print(
-            json.dumps(
-                {chiave_json[titolo]: sezione for titolo, sezione, _ in sezioni},
-                ensure_ascii=False,
-                indent=2,
-            )
-        )
+        output: dict = {chiave_json[titolo]: sezione for titolo, sezione, _ in sezioni}
+        if media_generale is not None:
+            output["media_generale"] = media_generale
+        if periodi_raw:
+            output["periodi"] = [
+                {
+                    "descrizione": p.descrizione,
+                    "dal": fmt(_di) if (_di := parse_data(p.data_inizio)) else None,
+                    "al": fmt(_df) if (_df := parse_data(p.data_fine)) else None,
+                    "media_scrutinio": p.media_scrutinio,
+                    "scrutinio_finale": p.is_scrutinio_finale,
+                }
+                for p in periodi_raw
+            ]
+        if docenti_raw:
+            output["docenti"] = [
+                {
+                    "cognome": d.des_cognome,
+                    "nome": d.des_nome,
+                    "email": d.des_email or None,
+                    "materie": d.materie,
+                }
+                for d in sorted(docenti_raw, key=lambda x: x.des_cognome)
+            ]
+        print(json.dumps(output, ensure_ascii=False, indent=2))
     elif all(not sezione[PLURALI[campo]] for _, sezione, campo in sezioni):
         print("Nessun elemento trovato nell'intervallo richiesto.")
     else:
         for titolo, sezione, campo in sezioni:
             stampa_sezione_testo(titolo, sezione, campo)
+        if periodi_raw or media_generale is not None:
+            stampa_periodi(periodi_raw, media_generale)
+        if docenti_raw:
+            stampa_docenti(docenti_raw)
 
 
 if __name__ == "__main__":
