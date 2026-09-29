@@ -122,6 +122,42 @@ Combinabile con `--json`, `--per-materia` e `--dal`/`--al`:
 `--dal` e `--al` vanno usati insieme, formato `DD-MM-YYYY`, e sovrascrivono
 i default per tutte le sezioni attive.
 
+### Solo domani
+
+```bash
+.venv/bin/python argo_cli.py --domani
+```
+
+Mostra solo i compiti da consegnare domani (nessun'altra sezione).
+Combinabile con `--json` e `--per-materia`; non con `--dal`/`--al`.
+
+### Invio via WhatsApp
+
+```bash
+.venv/bin/python argo_cli.py --domani --whatsapp
+```
+
+Stampa l'output e lo invia anche via WhatsApp con [CallMeBot](https://www.callmebot.com/blog/free-api-whatsapp-messages/)
+(gratuito, per uso personale). Setup una tantum: aggiungi il contatto di
+CallMeBot, inviagli il messaggio indicato sul loro sito per ottenere la
+API key, poi aggiungi a `.env.local`:
+
+```
+CALLMEBOT_PHONE=+391234567890
+CALLMEBOT_APIKEY=...
+```
+
+Per inviare a **più numeri** separa i valori con la virgola, nello stesso
+ordine (ogni numero deve registrarsi a CallMeBot e ha la sua API key):
+
+```
+CALLMEBOT_PHONE=+391234567890,+399876543210
+CALLMEBOT_APIKEY=chiave1,chiave2
+```
+
+Combinabile con qualsiasi altra opzione (usa il testo, non `--json`, se
+vuoi un messaggio leggibile).
+
 ### Ordinamento
 
 Di default l'output è raggruppato **per giorno**. Per raggrupparlo invece

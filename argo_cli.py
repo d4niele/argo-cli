@@ -10,9 +10,14 @@ di comando per non finire nella history della shell.
 from __future__ import annotations
 
 import argparse
+import contextlib
+import io
 import json
 import os
 import sys
+import urllib.error
+import urllib.parse
+import urllib.request
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
@@ -62,6 +67,42 @@ def leggi_credenziali() -> tuple[str, str, str]:
         )
         sys.exit(1)
     return scuola, utente, password  # type: ignore[return-value]
+
+
+def invia_whatsapp(testo: str) -> None:
+    """Invia ``testo`` via CallMeBot (https://www.callmebot.com/blog/free-api-whatsapp-messages/).
+
+    ``CALLMEBOT_PHONE`` e ``CALLMEBOT_APIKEY`` possono contenere più valori
+    separati da virgola (uno per destinatario, nello stesso ordine)."""
+    telefoni = [t.strip() for t in os.environ.get("CALLMEBOT_PHONE", "").split(",") if t.strip()]
+    apikeys = [k.strip() for k in os.environ.get("CALLMEBOT_APIKEY", "").split(",") if k.strip()]
+    if not telefoni or not apikeys:
+        print(
+            "Per --whatsapp imposta CALLMEBOT_PHONE e CALLMEBOT_APIKEY (vedi README.md).",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    if len(telefoni) != len(apikeys):
+        print(
+            "CALLMEBOT_PHONE e CALLMEBOT_APIKEY devono avere lo stesso numero di valori.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    falliti = 0
+    for telefono, apikey in zip(telefoni, apikeys):
+        query = urllib.parse.urlencode({"phone": telefono, "text": testo, "apikey": apikey})
+        try:
+            with urllib.request.urlopen(
+                f"https://api.callmebot.com/whatsapp.php?{query}", timeout=30
+            ):
+                pass
+        except (urllib.error.URLError, OSError) as exc:
+            print(f"Invio WhatsApp a {telefono} fallito: {exc}", file=sys.stderr)
+            falliti += 1
+        else:
+            print(f"Messaggio WhatsApp inviato a {telefono}.", file=sys.stderr)
+    if falliti:
+        sys.exit(1)
 
 
 def parse_data(testo: str) -> date | None:
@@ -353,6 +394,16 @@ def main() -> None:
         help="Fine intervallo personalizzato per voti e compiti (richiede anche --dal).",
     )
     parser.add_argument(
+        "--domani",
+        action="store_true",
+        help="Mostra solo i compiti da consegnare domani. Non combinabile con --dal/--al.",
+    )
+    parser.add_argument(
+        "--whatsapp",
+        action="store_true",
+        help="Invia l'output anche via WhatsApp (CallMeBot; vedi README.md).",
+    )
+    parser.add_argument(
         "--per-materia",
         action="store_true",
         help="Raggruppa e ordina l'output per materia/docente invece che per giorno (default: per giorno).",
@@ -394,11 +445,29 @@ def main() -> None:
         args.assenze = True
         args.note = True
 
+    if args.domani:
+        if args.dal or args.al:
+            parser.error("--domani non è combinabile con --dal/--al")
+        args.dal = args.al = date.today() + timedelta(days=1)
+        args.all = args.promemoria = args.bacheca = args.assenze = args.note = False
+
     if bool(args.dal) != bool(args.al):
         parser.error("--dal e --al vanno usati insieme")
     if args.dal and args.al and args.dal > args.al:
         parser.error("--dal deve essere precedente o uguale a --al")
 
+    if args.whatsapp:
+        buffer = io.StringIO()
+        with contextlib.redirect_stdout(buffer):
+            esegui(args)
+        testo = buffer.getvalue().strip()
+        print(testo)
+        invia_whatsapp(testo)
+    else:
+        esegui(args)
+
+
+def esegui(args: argparse.Namespace) -> None:
     carica_env_locale()
     scuola, utente, password = leggi_credenziali()
 
@@ -418,7 +487,7 @@ def main() -> None:
                 periodi_raw = dashboard.lista_periodi
                 media_generale = dashboard.media_generale
             else:
-                voti = didup.get_voti()
+                voti = [] if args.domani else didup.get_voti()
                 registro = didup.get_registro()
                 promemoria = didup.get_promemoria() if args.promemoria else []
                 bacheca = didup.get_bacheca() if args.bacheca else []
@@ -460,17 +529,18 @@ def main() -> None:
         ),
         "materia",
     ))
-    sezioni.append((
-        "Voti",
-        costruisci_sezione(
-            inizio_voti,
-            fine_voti,
-            raccogli_voti(voti, inizio_voti, fine_voti),
-            args.per_materia,
+    if not args.domani:
+        sezioni.append((
+            "Voti",
+            costruisci_sezione(
+                inizio_voti,
+                fine_voti,
+                raccogli_voti(voti, inizio_voti, fine_voti),
+                args.per_materia,
+                "materia",
+            ),
             "materia",
-        ),
-        "materia",
-    ))
+        ))
     if args.promemoria:
         sezioni.append((
             "Promemoria",
