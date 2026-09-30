@@ -410,8 +410,12 @@ def main() -> None:
     )
     parser.add_argument(
         "--promemoria",
-        action="store_true",
-        help="Includi i promemoria dei docenti (es. verifiche/interrogazioni programmate).",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help=(
+            "Includi i promemoria dei docenti (es. verifiche/interrogazioni programmate). "
+            "Attivo di default, tranne con --domani; usa --no-promemoria per escluderli."
+        ),
     )
     parser.add_argument(
         "--bacheca",
@@ -439,7 +443,9 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    promemoria_esplicito = args.promemoria
+    promemoria_esplicito = bool(args.promemoria)
+    if args.promemoria is None:
+        args.promemoria = not args.domani
 
     if args.all:
         args.promemoria = True

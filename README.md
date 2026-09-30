@@ -85,7 +85,7 @@ Mostra compiti (settimana corrente) e voti (ultimi 7 giorni).
 
 | Flag | Contenuto | Intervallo di default |
 |---|---|---|
-| `--promemoria` | verifiche/interrogazioni annotate dai docenti | da oggi ai prossimi 30 giorni |
+| `--promemoria` / `--no-promemoria` | verifiche/interrogazioni annotate dai docenti (attivi di default, tranne con `--domani`) | da oggi ai prossimi 30 giorni |
 | `--bacheca` | comunicazioni scuola-famiglia | come i compiti |
 | `--assenze` | assenze, ritardi, uscite anticipate | ultimi 30 giorni |
 | `--note` | note disciplinari | ultimi 30 giorni |
