@@ -257,7 +257,7 @@ def raccogli_promemoria(promemoria: list, inizio: date, fine: date) -> list[tupl
         if giorno is None or not (inizio <= giorno <= fine):
             continue
         testo = p.des_annotazioni
-        if p.ora_inizio and p.ora_fine:
+        if p.ora_inizio and p.ora_fine and (p.ora_inizio[:5], p.ora_fine[:5]) != ("00:00", "00:00"):
             testo += f" [{p.ora_inizio[:5]}-{p.ora_fine[:5]}]"
         voci.append((giorno, p.docente, testo))
     return voci
@@ -396,7 +396,7 @@ def main() -> None:
     parser.add_argument(
         "--domani",
         action="store_true",
-        help="Mostra solo i compiti da consegnare domani. Non combinabile con --dal/--al.",
+        help="Mostra solo i compiti di domani (più i promemoria se usato con --promemoria). Non combinabile con --dal/--al.",
     )
     parser.add_argument(
         "--whatsapp",
@@ -439,6 +439,8 @@ def main() -> None:
     )
     args = parser.parse_args()
 
+    promemoria_esplicito = args.promemoria
+
     if args.all:
         args.promemoria = True
         args.bacheca = True
@@ -449,7 +451,8 @@ def main() -> None:
         if args.dal or args.al:
             parser.error("--domani non è combinabile con --dal/--al")
         args.dal = args.al = date.today() + timedelta(days=1)
-        args.all = args.promemoria = args.bacheca = args.assenze = args.note = False
+        args.all = args.bacheca = args.assenze = args.note = False
+        args.promemoria = promemoria_esplicito
 
     if bool(args.dal) != bool(args.al):
         parser.error("--dal e --al vanno usati insieme")
@@ -514,6 +517,11 @@ def esegui(args: argparse.Namespace) -> None:
         inizio_settimanale, fine_settimanale = range_compiti(oggi)
         inizio_mensile, fine_mensile = range_ultimo_mese(oggi)
 
+    if args.dal and args.al:
+        inizio_prom, fine_prom = args.dal, args.al
+    else:
+        inizio_prom, fine_prom = oggi, oggi + timedelta(days=30)
+
     inizio_voti, fine_voti = (args.dal, args.al) if (args.dal and args.al) else range_voti(oggi)
 
     sezioni: list[tuple[str, dict, str]] = []
@@ -545,9 +553,9 @@ def esegui(args: argparse.Namespace) -> None:
         sezioni.append((
             "Promemoria",
             costruisci_sezione(
-                inizio_settimanale,
-                fine_settimanale,
-                raccogli_promemoria(promemoria, inizio_settimanale, fine_settimanale),
+                inizio_prom,
+                fine_prom,
+                raccogli_promemoria(promemoria, inizio_prom, fine_prom),
                 args.per_materia,
                 "docente",
             ),

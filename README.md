@@ -85,7 +85,7 @@ Mostra compiti (settimana corrente) e voti (ultimi 7 giorni).
 
 | Flag | Contenuto | Intervallo di default |
 |---|---|---|
-| `--promemoria` | verifiche/interrogazioni annotate dai docenti | come i compiti |
+| `--promemoria` | verifiche/interrogazioni annotate dai docenti | da oggi ai prossimi 30 giorni |
 | `--bacheca` | comunicazioni scuola-famiglia | come i compiti |
 | `--assenze` | assenze, ritardi, uscite anticipate | ultimi 30 giorni |
 | `--note` | note disciplinari | ultimi 30 giorni |
@@ -128,7 +128,8 @@ i default per tutte le sezioni attive.
 .venv/bin/python argo_cli.py --domani
 ```
 
-Mostra solo i compiti da consegnare domani (nessun'altra sezione).
+Mostra solo i compiti da consegnare domani (nessun'altra sezione). Aggiungi
+`--promemoria` per vedere anche i promemoria di domani.
 Combinabile con `--json` e `--per-materia`; non con `--dal`/`--al`.
 
 ### Invio via WhatsApp
