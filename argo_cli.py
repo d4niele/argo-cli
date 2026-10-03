@@ -443,7 +443,6 @@ def raccogli_assenze(assenze: list, inizio: date, fine: date) -> list[tuple[date
         giorno = parse_data(a.data)
         if giorno is None or not (inizio <= giorno <= fine):
             continue
-        testo = a.descrizione
         extra = []
         if a.da_giustificare:
             extra.append("da giustificare")
@@ -451,8 +450,7 @@ def raccogli_assenze(assenze: list, inizio: date, fine: date) -> list[tuple[date
             extra.append("giustificata")
         if a.nota:
             extra.append(a.nota)
-        if extra:
-            testo += " (" + "; ".join(extra) + ")"
+        testo = "; ".join(extra) if extra else a.descrizione or "—"
         if a.docente:
             testo += f" — {a.docente}"
         voci.append((giorno, a.descrizione or "Evento", testo))
@@ -630,6 +628,8 @@ def main() -> None:
         args.note = True
 
     if args.domani:
+        if args.all:
+            parser.error("--domani non è combinabile con --all")
         if args.dal or args.al:
             parser.error("--domani non è combinabile con --dal/--al")
         args.dal = args.al = date.today() + timedelta(days=1)
