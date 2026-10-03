@@ -1,1 +1,1 @@
-didupwrapper
+didupwrapper==0.1.1
