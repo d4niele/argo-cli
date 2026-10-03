@@ -447,7 +447,7 @@ def raccogli_assenze(assenze: list, inizio: date, fine: date) -> list[tuple[date
         extra = []
         if a.da_giustificare:
             extra.append("da giustificare")
-        elif a.giustificata:
+        elif a.is_giustificata:  # ``giustificata`` è la stringa "S"/"N": "N" sarebbe vera
             extra.append("giustificata")
         if a.nota:
             extra.append(a.nota)
