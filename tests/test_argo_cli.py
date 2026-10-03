@@ -5,15 +5,26 @@ versione rinomina un campo usato dalla CLI, i test falliscono.
 """
 
 import argparse
+import contextlib
+import io
+import os
+import tempfile
+import types
 import unittest
+import urllib.error
 from datetime import date
+from pathlib import Path
+from unittest import mock
 
 from didupwrapper.models import (
     Compito,
     ComunicazioneBacheca,
+    Docente,
     EventoAppello,
+    FileBachecaAlunno,
     FuoriClasse,
     NotaDisciplinare,
+    Periodo,
     Promemoria,
     RegistroLezione,
     Voto,
@@ -228,6 +239,176 @@ class TestRaccogli(unittest.TestCase):
             argo_cli.raccogli_fuori_classe(fuori, LUNEDI, DOMENICA),
             [(date(2026, 10, 6), "—", "Gara (mattina) [online]")],
         )
+
+    def test_bacheca_in_sospeso(self):
+        bacheca = [
+            ComunicazioneBacheca(data="2026-09-01", messaggio="Da firmare", pv_richiesta=True),
+            ComunicazioneBacheca(data="2026-09-01", messaggio="Firmata", pv_richiesta=True, is_presa_visione=True),
+            ComunicazioneBacheca(data="2026-09-01", messaggio="Scade", data_scadenza="2026-10-07"),
+            ComunicazioneBacheca(data="2026-09-01", messaggio="Scaduta", data_scadenza="2026-10-01"),
+            ComunicazioneBacheca(data="2026-10-12", messaggio="Futura"),
+        ]
+        self.assertEqual(
+            [testo for _, _, testo in argo_cli.raccogli_bacheca(bacheca, LUNEDI, DOMENICA, LUNEDI)],
+            ["Da firmare [presa visione richiesta]", "Scade (scadenza 07-10-2026)"],
+        )
+        # Senza ``in_sospeso_al`` (intervallo esplicito) le vecchie non compaiono.
+        self.assertEqual(argo_cli.raccogli_bacheca(bacheca, LUNEDI, DOMENICA), [])
+
+    def test_bacheca_alunno(self):
+        allegati = [
+            FileBachecaAlunno(data="2026-10-06", nome_file="pagella.pdf"),
+            FileBachecaAlunno(data="2026-09-01", messaggio="Da scaricare", flg_download_genitore=True),
+            FileBachecaAlunno(
+                data="2026-09-01", messaggio="Scaricato", flg_download_genitore=True, is_presa_visione=True
+            ),
+        ]
+        self.assertEqual(
+            argo_cli.raccogli_bacheca_alunno(allegati, LUNEDI, DOMENICA, in_sospeso=True),
+            [
+                (date(2026, 10, 6), "Allegato", "pagella.pdf"),
+                (date(2026, 9, 1), "Allegato", "Da scaricare [da scaricare]"),
+            ],
+        )
+        self.assertEqual(len(argo_cli.raccogli_bacheca_alunno(allegati, LUNEDI, DOMENICA)), 1)
+
+
+class TestEnvLocale(unittest.TestCase):
+    def test_utf8_con_bom(self):
+        with tempfile.TemporaryDirectory() as cartella:
+            env = Path(cartella) / ".env.local"
+            env.write_bytes("\ufeffDIDUP_PASSWORD='perché'\n# commento\n".encode("utf-8"))
+            with mock.patch.object(argo_cli, "ENV_FILE", env), mock.patch.dict(os.environ, clear=True):
+                argo_cli.carica_env_locale()
+                self.assertEqual(os.environ["DIDUP_PASSWORD"], "perché")
+
+
+class _Risposta(io.BytesIO):
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        self.close()
+
+
+class TestWhatsapp(unittest.TestCase):
+    def test_esito_callmebot(self):
+        self.assertIsNone(argo_cli.esito_callmebot("<p>Message queued. You will receive it soon.</p>", "x"))
+        self.assertEqual(
+            argo_cli.esito_callmebot("<b>APIKey is invalid</b>", "x"), "APIKey is invalid"
+        )
+        self.assertEqual(argo_cli.esito_callmebot("", "x"), "risposta vuota")
+        # Il testo inviato ripetuto nella pagina non vale come conferma.
+        self.assertIsNotNone(argo_cli.esito_callmebot("Error. Text: message sent", "message sent"))
+
+    def test_dividi_messaggio(self):
+        self.assertEqual(argo_cli.dividi_messaggio("breve"), ["breve"])
+        testo = "\n".join(f"riga {i} " + "x" * 80 for i in range(40))
+        parti = argo_cli.dividi_messaggio(testo, 1000)
+        self.assertGreater(len(parti), 1)
+        self.assertTrue(all(len(p) <= 1000 for p in parti))
+        self.assertTrue(parti[0].startswith(f"(1/{len(parti)})\n"))
+        senza_numeri = "\n".join(p.split("\n", 1)[1] for p in parti)
+        self.assertEqual(senza_numeri, testo)
+        # Una riga più lunga del limite viene spezzata.
+        self.assertTrue(all(len(p) <= 100 for p in argo_cli.dividi_messaggio("y" * 500, 100)))
+
+    def _invia(self, corpi):
+        risposte = iter(corpi)
+
+        def urlopen(url, timeout=None):
+            corpo = next(risposte)
+            if isinstance(corpo, Exception):
+                raise corpo
+            return _Risposta(corpo.encode())
+
+        errori = io.StringIO()
+        with mock.patch.dict(
+            os.environ, {"CALLMEBOT_PHONE": "+391, +392", "CALLMEBOT_APIKEY": "a,b"}
+        ), mock.patch("urllib.request.urlopen", urlopen), contextlib.redirect_stderr(errori):
+            try:
+                argo_cli.invia_whatsapp("ciao")
+                codice = 0
+            except SystemExit as exc:
+                codice = exc.code
+        return codice, errori.getvalue()
+
+    def test_invio_riuscito(self):
+        codice, errori = self._invia(["Message queued", "Message queued"])
+        self.assertEqual(codice, 0)
+        self.assertIn("inviato a +392", errori)
+
+    def test_errore_nel_corpo(self):
+        codice, errori = self._invia(["APIKey is invalid", "Message queued"])
+        self.assertEqual(codice, 1)
+        self.assertIn("+391 fallito: APIKey is invalid", errori)
+        self.assertIn("inviato a +392", errori)
+
+    def test_errore_di_rete(self):
+        codice, errori = self._invia([urllib.error.URLError("offline"), "Message queued"])
+        self.assertEqual(codice, 1)
+        self.assertIn("+391 fallito", errori)
+
+
+class _DataFissa(date):
+    @classmethod
+    def today(cls):
+        return LUNEDI
+
+
+class TestMain(unittest.TestCase):
+    """Esegue ``main`` con un client finto (nessuna rete)."""
+
+    PROMEMORIA = [Promemoria(dat_giorno="2026-10-06", des_annotazioni="verifica", docente="Rossi")]
+
+    def _esegui(self, argv, **dashboard):
+        dati = dict(
+            voti=[], registro=[], promemoria=self.PROMEMORIA, bacheca=[], appello=[],
+            note_disciplinari=[], fuori_classe=[], bacheca_alunno=[],
+            lista_docenti_classe=[], lista_periodi=[], media_generale=None,
+        )
+        dati.update(dashboard)
+        client = mock.MagicMock()
+        client.__enter__.return_value = client
+        client.get_dashboard.return_value = types.SimpleNamespace(**dati)
+        client.get_registro.return_value = dati["registro"]
+        client.get_voti.return_value = dati["voti"]
+        client.get_promemoria.return_value = dati["promemoria"]
+        client.get_bacheca.return_value = dati["bacheca"]
+        uscita = io.StringIO()
+        with mock.patch.object(argo_cli, "DiDUPClientSync", return_value=client), \
+                mock.patch.object(argo_cli, "date", _DataFissa), \
+                mock.patch.object(argo_cli, "carica_env_locale"), \
+                mock.patch.dict(os.environ, {"DIDUP_SCUOLA": "s", "DIDUP_USERNAME": "u", "DIDUP_PASSWORD": "p"}), \
+                mock.patch("sys.argv", ["argo_cli.py", *argv]), \
+                contextlib.redirect_stdout(uscita):
+            argo_cli.main()
+        return uscita.getvalue()
+
+    def test_all_rispetta_no_promemoria(self):
+        self.assertIn("verifica", self._esegui(["--all"]))
+        self.assertNotIn("verifica", self._esegui(["--all", "--no-promemoria"]))
+
+    def test_all_vuoto_stampa_periodi_media_docenti(self):
+        uscita = self._esegui(
+            ["--all", "--no-promemoria"],
+            media_generale=7.25,
+            lista_periodi=[Periodo(descrizione="Primo quadrimestre", data_inizio="2026-09-15", data_fine="2027-01-31")],
+            lista_docenti_classe=[Docente(des_cognome="Bianchi", des_nome="Anna", materie=["Matematica"])],
+        )
+        self.assertIn("Nessun elemento trovato", uscita)
+        self.assertIn("Media generale: 7.25", uscita)
+        self.assertIn("Primo quadrimestre", uscita)
+        self.assertIn("Bianchi Anna", uscita)
+
+    def test_intestazione_bacheca(self):
+        bacheca = [ComunicazioneBacheca(data="2026-08-01", messaggio="Vecchia", pv_richiesta=True)]
+        uscita = self._esegui(["--bacheca", "--no-promemoria"], bacheca=bacheca)
+        self.assertIn("=== Bacheca (dal 06-09-2026 al 05-10-2026, più quelle precedenti ancora in sospeso) ===", uscita)
+        self.assertIn("Vecchia", uscita)
+        # Con un intervallo esplicito niente sospesi e niente nota.
+        uscita = self._esegui(["--bacheca", "--dal", "01-08-2026", "--al", "02-08-2026"], bacheca=bacheca)
+        self.assertIn("=== Bacheca (dal 01-08-2026 al 02-08-2026) ===", uscita)
 
 
 class TestAlunno(unittest.TestCase):

@@ -345,12 +345,16 @@ def costruisci_sezione(
     }
 
 
-def stampa_sezione_testo(titolo: str, sezione: dict, campo: str = "materia") -> None:
+def stampa_sezione_testo(
+    titolo: str, sezione: dict, campo: str = "materia", nota: str = ""
+) -> None:
+    """``nota`` si aggiunge all'intervallo nell'intestazione (es. per la bacheca,
+    che può includere voci precedenti a ``dal`` ancora in sospeso)."""
     chiave_plurale = PLURALI[campo]
     valori = sezione[chiave_plurale]
     if not valori:
         return
-    print(f"\n=== {titolo} (dal {sezione['dal']} al {sezione['al']}) ===")
+    print(f"\n=== {titolo} (dal {sezione['dal']} al {sezione['al']}{nota}) ===")
     print(f"{sezione[f'numero_{chiave_plurale}']} {chiave_plurale} coinvolte: {', '.join(valori)}\n")
     for gruppo in sezione["gruppi"]:
         print(f"{gruppo['etichetta']}:")
@@ -856,8 +860,15 @@ def esegui(args: argparse.Namespace) -> None:
     else:
         if all(not sezione[PLURALI[campo]] for _, sezione, campo in sezioni):
             print("Nessun elemento trovato nell'intervallo richiesto.")
+        # Senza --dal/--al bacheca e bacheca alunno includono anche voci più vecchie
+        # ancora in sospeso: l'intestazione lo dice, altrimenti "dal" sembrerebbe sbagliato.
+        nota_sospesi = {
+            "Bacheca": ", più quelle precedenti ancora in sospeso",
+            "Bacheca alunno": ", più quelli precedenti ancora da scaricare",
+        }
         for titolo, sezione, campo in sezioni:
-            stampa_sezione_testo(titolo, sezione, campo)
+            nota = nota_sospesi.get(titolo, "") if in_sospeso_al is not None else ""
+            stampa_sezione_testo(titolo, sezione, campo, nota)
         # Periodi, media e docenti non dipendono dall'intervallo: si stampano sempre se presenti.
         if periodi_raw or media_generale is not None:
             stampa_periodi(periodi_raw, media_generale)
