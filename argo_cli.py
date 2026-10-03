@@ -14,6 +14,8 @@ import contextlib
 import io
 import json
 import os
+import secrets
+import string
 import sys
 import urllib.error
 import urllib.parse
@@ -103,6 +105,80 @@ def invia_whatsapp(testo: str) -> None:
             print(f"Messaggio WhatsApp inviato a {telefono}.", file=sys.stderr)
     if falliti:
         sys.exit(1)
+
+
+def profili_account(didup: DiDUPClientSync) -> list[tuple[dict, dict]]:
+    """Restituisce una coppia (dati di login, alunno) per ogni alunno dell'account.
+
+    Con un account genitore e più figli il login applicativo (``POST login``)
+    restituisce un profilo per figlio, ognuno con il suo ``token``
+    (``x-auth-token``). didupwrapper 0.1.x tiene solo il primo (``data[0]``),
+    quindi gli altri figli restano irraggiungibili. Qui si ripete la stessa
+    chiamata ``login`` e, per ogni profilo, si legge il nome dell'alunno con
+    ``GET profilo`` (``data.alunno``). Sono le stesse chiamate di sola lettura
+    che fa l'app all'avvio.
+
+    Usa attributi privati del wrapper: se una versione futura li cambia,
+    l'errore viene segnalato in modo esplicito.
+    """
+    try:
+        client = didup._async
+        risposta = didup._run(
+            client._post(
+                "login",
+                json={
+                    "lista-opzioni-notifiche": "{}",
+                    "lista-x-auth-token": "[]",
+                    "clientID": "".join(
+                        secrets.choice(string.ascii_letters + string.digits) for _ in range(163)
+                    ),
+                },
+            )
+        )
+        client._verifica_success(risposta)
+        profili = []
+        for voce in (risposta or {}).get("data") or []:
+            if voce.get("profiloDisabilitato"):
+                continue
+            client._login_data = voce
+            dati = didup._run(client._get("profilo"))
+            alunno = ((dati or {}).get("data") or {}).get("alunno") or {}
+            profili.append((voce, alunno))
+        return profili
+    except AttributeError as exc:
+        raise DiDUPError(
+            f"versione di didupwrapper non supportata per la scelta dell'alunno ({exc})"
+        ) from exc
+
+
+def nome_alunno(alunno: dict) -> str:
+    return alunno.get("nominativo") or f"{alunno.get('cognome', '')} {alunno.get('nome', '')}".strip()
+
+
+def corrisponde(alunno: dict, cercato: str) -> bool:
+    """Nome, nome e cognome in qualunque ordine o una sola parola del nominativo."""
+    cercato = " ".join(cercato.split()).casefold()
+    nome = alunno.get("nome", "").casefold()
+    cognome = alunno.get("cognome", "").casefold()
+    nominativo = " ".join(nome_alunno(alunno).split()).casefold()
+    return bool(cercato) and (
+        cercato in (nome, nominativo, f"{nome} {cognome}", f"{cognome} {nome}")
+        or cercato in nominativo.split()
+    )
+
+
+def seleziona_alunno(didup: DiDUPClientSync, cercato: str) -> str:
+    """Rende attivo il profilo dell'alunno ``cercato``; restituisce il suo nome."""
+    profili = profili_account(didup)
+    scelti = [(voce, alunno) for voce, alunno in profili if corrisponde(alunno, cercato)]
+    if len(scelti) != 1:
+        nomi = ", ".join(nome_alunno(a) for _, a in profili) or "nessuno"
+        motivo = "nessun alunno" if not scelti else "più alunni"
+        raise DiDUPError(f"{motivo} corrisponde a '{cercato}' (alunni dell'account: {nomi})")
+    voce, alunno = scelti[0]
+    didup._async._login_data = voce
+    didup.invalida_cache()
+    return nome_alunno(alunno)
 
 
 def parse_data(testo: str) -> date | None:
@@ -433,6 +509,19 @@ def main() -> None:
         help="Includi le note disciplinari (default: ultimi 30 giorni).",
     )
     parser.add_argument(
+        "--alunno",
+        metavar="NOME",
+        help=(
+            "Per gli account genitore con più figli: nome dell'alunno da consultare "
+            "(default: variabile DIDUP_ALUNNO, altrimenti il primo profilo)."
+        ),
+    )
+    parser.add_argument(
+        "--elenco-alunni",
+        action="store_true",
+        help="Elenca gli alunni collegati all'account ed esce.",
+    )
+    parser.add_argument(
         "--all",
         action="store_true",
         help=(
@@ -479,9 +568,16 @@ def main() -> None:
 def esegui(args: argparse.Namespace) -> None:
     carica_env_locale()
     scuola, utente, password = leggi_credenziali()
+    args.alunno = args.alunno or os.environ.get("DIDUP_ALUNNO")
 
     try:
         with DiDUPClientSync(scuola, utente, password, auto_versione=True) as didup:
+            if args.elenco_alunni:
+                for _, alunno in profili_account(didup):
+                    print(nome_alunno(alunno))
+                return
+            if args.alunno:
+                print(f"Alunno: {seleziona_alunno(didup, args.alunno)}", file=sys.stderr)
             if args.all:
                 dashboard = didup.get_dashboard()
                 voti = dashboard.voti
