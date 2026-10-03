@@ -18,7 +18,8 @@ elettronico **Argo DidUp Famiglia**, senza passare dal browser o dall'app.
 - **Voti**: ultimi 7 giorni.
 - **Promemoria** dei docenti (verifiche/interrogazioni annotate) — opzionale.
 - **Comunicazioni di bacheca** scuola-famiglia, con scadenza e stato
-  "presa visione" — opzionale.
+  "presa visione" (default: ultimi 30 giorni, più quelle precedenti ancora
+  in sospeso) — opzionale.
 - **Assenze/ritardi/uscite anticipate** (default: ultimi 30 giorni) — opzionale.
 - **Note disciplinari** (default: ultimi 30 giorni) — opzionale.
 - Intervallo di date personalizzato (`--dal`/`--al`) per interrogare
@@ -88,7 +89,7 @@ Mostra compiti (settimana corrente) e voti (ultimi 7 giorni).
 | Flag | Contenuto | Intervallo di default |
 |---|---|---|
 | `--promemoria` / `--no-promemoria` | verifiche/interrogazioni annotate dai docenti (attivi di default, tranne con `--domani`) | da oggi ai prossimi 30 giorni |
-| `--bacheca` | comunicazioni scuola-famiglia | come i compiti |
+| `--bacheca` | comunicazioni scuola-famiglia | pubblicate negli ultimi 30 giorni, più quelle precedenti con presa visione ancora da dare o scadenza non passata |
 | `--assenze` | assenze, ritardi, uscite anticipate | ultimi 30 giorni |
 | `--note` | note disciplinari | ultimi 30 giorni |
 
@@ -107,6 +108,8 @@ Combinabili tra loro:
 Abilita tutte le sezioni opzionali e aggiunge: **fuori classe**, **bacheca alunno**,
 **periodi scolastici** (con media di scrutinio), **media generale** e **elenco docenti**.
 Usa una sola chiamata API (`get_dashboard`), quindi è più veloce di attivare i flag singolarmente.
+La bacheca alunno segue lo stesso intervallo della bacheca (ultimi 30 giorni,
+più gli allegati precedenti ancora da scaricare).
 
 Combinabile con `--json`, `--per-materia` e `--dal`/`--al`:
 
@@ -122,7 +125,8 @@ Combinabile con `--json`, `--per-materia` e `--dal`/`--al`:
 ```
 
 `--dal` e `--al` vanno usati insieme, formato `DD-MM-YYYY`, e sovrascrivono
-i default per tutte le sezioni attive.
+i default per tutte le sezioni attive. Con un intervallo esplicito la bacheca
+mostra solo le comunicazioni pubblicate in quei giorni.
 
 ### Solo domani
 
