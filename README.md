@@ -105,7 +105,8 @@ Combinabili tra loro:
 .venv/bin/python argo_cli.py --all
 ```
 
-Abilita tutte le sezioni opzionali e aggiunge: **fuori classe**, **bacheca alunno**,
+Abilita tutte le sezioni opzionali (i promemoria si possono comunque escludere
+con `--no-promemoria`) e aggiunge: **fuori classe**, **bacheca alunno**,
 **periodi scolastici** (con media di scrutinio), **media generale** e **elenco docenti**.
 Usa una sola chiamata API (`get_dashboard`), quindi è più veloce di attivare i flag singolarmente.
 

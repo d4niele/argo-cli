@@ -539,10 +539,10 @@ def main() -> None:
 
     promemoria_esplicito = bool(args.promemoria)
     if args.promemoria is None:
+        # Nessuna scelta esplicita: attivi di default (anche con --all), non con --domani.
         args.promemoria = not args.domani
 
     if args.all:
-        args.promemoria = True
         args.bacheca = True
         args.assenze = True
         args.note = True
