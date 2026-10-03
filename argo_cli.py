@@ -765,11 +765,12 @@ def esegui(args: argparse.Namespace) -> None:
                 for d in sorted(docenti_raw, key=lambda x: x.des_cognome)
             ]
         print(json.dumps(output, ensure_ascii=False, indent=2))
-    elif all(not sezione[PLURALI[campo]] for _, sezione, campo in sezioni):
-        print("Nessun elemento trovato nell'intervallo richiesto.")
     else:
+        if all(not sezione[PLURALI[campo]] for _, sezione, campo in sezioni):
+            print("Nessun elemento trovato nell'intervallo richiesto.")
         for titolo, sezione, campo in sezioni:
             stampa_sezione_testo(titolo, sezione, campo)
+        # Periodi, media e docenti non dipendono dall'intervallo: si stampano sempre se presenti.
         if periodi_raw or media_generale is not None:
             stampa_periodi(periodi_raw, media_generale)
         if docenti_raw:
