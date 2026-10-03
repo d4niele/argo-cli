@@ -230,3 +230,7 @@ didup --json
 didup --dal 01-09-2026 --al 30-09-2026 --per-materia
 ```
 
+
+## Licenza
+
+Distribuito con licenza [MIT](LICENSE).
