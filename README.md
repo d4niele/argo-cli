@@ -72,7 +72,8 @@ DIDUP_PASSWORD=...
 ```
 
 `argo_cli.py` carica automaticamente `.env.local` all'avvio.
-Il file è già escluso dal versionamento via `.gitignore`: **non
+Il file va salvato in UTF-8 (default di quasi tutti gli editor) ed è già
+escluso dal versionamento via `.gitignore`: **non
 committarlo mai** e non incollare la password in chat, issue o commit.
 
 ## Uso

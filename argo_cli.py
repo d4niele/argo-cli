@@ -30,10 +30,15 @@ ENV_FILE = Path(__file__).parent / ".env.local"
 
 
 def carica_env_locale() -> None:
-    """Carica DIDUP_* da .env.local senza sovrascrivere variabili già impostate."""
+    """Carica DIDUP_* da .env.local senza sovrascrivere variabili già impostate.
+
+    Il file è letto sempre come UTF-8 (``utf-8-sig`` ignora l'eventuale BOM
+    aggiunto da alcuni editor Windows), indipendentemente dalla codifica di
+    sistema: altrimenti su Windows (cp1252) una password con lettere accentate
+    verrebbe letta male e il login fallirebbe."""
     if not ENV_FILE.exists():
         return
-    for riga in ENV_FILE.read_text().splitlines():
+    for riga in ENV_FILE.read_text(encoding="utf-8-sig").splitlines():
         riga = riga.strip()
         if not riga or riga.startswith("#") or "=" not in riga:
             continue
