@@ -161,6 +161,12 @@ CALLMEBOT_APIKEY=chiave1,chiave2
 Combinabile con qualsiasi altra opzione (usa il testo, non `--json`, se
 vuoi un messaggio leggibile).
 
+L'invio è considerato riuscito solo se CallMeBot conferma ("Message queued"):
+se risponde con un errore (API key sbagliata, numero non attivato…) la CLI lo
+stampa ed esce con codice 1, così un cron/timer se ne accorge. I messaggi più
+lunghi di circa 1000 caratteri (tipico con `--all`) vengono spezzati in più
+parti numerate `(1/3)`, `(2/3)`… inviate a qualche secondo di distanza.
+
 ### Più figli con lo stesso account
 
 Con un account genitore collegato a più figli, Argo restituisce al login un

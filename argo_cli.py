@@ -13,10 +13,13 @@ import argparse
 import contextlib
 import io
 import json
+import html
 import os
+import re
 import secrets
 import string
 import sys
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -71,6 +74,53 @@ def leggi_credenziali() -> tuple[str, str, str]:
     return scuola, utente, password  # type: ignore[return-value]
 
 
+CALLMEBOT_URL = "https://api.callmebot.com/whatsapp.php"
+# Il testo viaggia nella query string: oltre questa lunghezza si spezza in più messaggi.
+CALLMEBOT_MAX_CARATTERI = 1000
+CALLMEBOT_PAUSA_SECONDI = 3
+CALLMEBOT_OK = re.compile(r"message\s+(queued|sent)", re.IGNORECASE)
+
+
+def dividi_messaggio(testo: str, limite: int = CALLMEBOT_MAX_CARATTERI) -> list[str]:
+    """Spezza ``testo`` in parti di al più ``limite`` caratteri, andando a capo
+    tra una riga e l'altra quando possibile; con più parti aggiunge ``(i/n)``."""
+    margine = len("(99/99)\n")
+    limite_parte = max(limite - margine, 1)
+    parti: list[str] = []
+    corrente = ""
+    for riga in testo.splitlines():
+        while len(riga) > limite_parte:
+            if corrente:
+                parti.append(corrente)
+                corrente = ""
+            parti.append(riga[:limite_parte])
+            riga = riga[limite_parte:]
+        candidato = f"{corrente}\n{riga}" if corrente else riga
+        if len(candidato) > limite_parte:
+            parti.append(corrente)
+            corrente = riga
+        else:
+            corrente = candidato
+    if corrente or not parti:
+        parti.append(corrente)
+    if len(parti) == 1:
+        return parti
+    return [f"({i}/{len(parti)})\n{parte}" for i, parte in enumerate(parti, 1)]
+
+
+def esito_callmebot(corpo: str, testo: str) -> str | None:
+    """``None`` se la risposta di CallMeBot conferma l'invio, altrimenti il
+    motivo (testo della pagina, senza HTML). CallMeBot risponde 200 anche in
+    caso di errore (API key sbagliata, numero non attivato…), quindi conta
+    solo la conferma "Message queued"/"Message sent" nel corpo."""
+    pulito = html.unescape(re.sub(r"<[^>]+>", " ", corpo))
+    # La pagina può ripetere il testo inviato: non deve contare come conferma.
+    pulito = " ".join(pulito.replace(testo, " ").split())
+    if CALLMEBOT_OK.search(pulito):
+        return None
+    return pulito[:300] or "risposta vuota"
+
+
 def invia_whatsapp(testo: str) -> None:
     """Invia ``testo`` via CallMeBot (https://www.callmebot.com/blog/free-api-whatsapp-messages/).
 
@@ -90,19 +140,27 @@ def invia_whatsapp(testo: str) -> None:
             file=sys.stderr,
         )
         sys.exit(1)
+    parti = dividi_messaggio(testo)
     falliti = 0
     for telefono, apikey in zip(telefoni, apikeys):
-        query = urllib.parse.urlencode({"phone": telefono, "text": testo, "apikey": apikey})
-        try:
-            with urllib.request.urlopen(
-                f"https://api.callmebot.com/whatsapp.php?{query}", timeout=30
-            ):
-                pass
-        except (urllib.error.URLError, OSError) as exc:
-            print(f"Invio WhatsApp a {telefono} fallito: {exc}", file=sys.stderr)
-            falliti += 1
+        for indice, parte in enumerate(parti):
+            if indice:
+                time.sleep(CALLMEBOT_PAUSA_SECONDI)
+            query = urllib.parse.urlencode({"phone": telefono, "text": parte, "apikey": apikey})
+            try:
+                with urllib.request.urlopen(f"{CALLMEBOT_URL}?{query}", timeout=30) as risposta:
+                    corpo = risposta.read().decode("utf-8", errors="replace")
+            except (urllib.error.URLError, OSError) as exc:
+                errore = str(exc)
+            else:
+                errore = esito_callmebot(corpo, parte)
+            if errore:
+                print(f"Invio WhatsApp a {telefono} fallito: {errore}", file=sys.stderr)
+                falliti += 1
+                break
         else:
-            print(f"Messaggio WhatsApp inviato a {telefono}.", file=sys.stderr)
+            descrizione = f" ({len(parti)} parti)" if len(parti) > 1 else ""
+            print(f"Messaggio WhatsApp inviato a {telefono}{descrizione}.", file=sys.stderr)
     if falliti:
         sys.exit(1)
 
