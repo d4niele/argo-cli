@@ -344,12 +344,28 @@ def raccogli_promemoria(promemoria: list, inizio: date, fine: date) -> list[tupl
     return voci
 
 
-def raccogli_bacheca(bacheca: list, inizio: date, fine: date) -> list[tuple[date, str, str]]:
+def raccogli_bacheca(
+    bacheca: list, inizio: date, fine: date, in_sospeso_al: date | None = None
+) -> list[tuple[date, str, str]]:
+    """Comunicazioni pubblicate tra ``inizio`` e ``fine`` (``c.data`` è la data di
+    pubblicazione, quindi nel passato).
+
+    Con ``in_sospeso_al`` include anche quelle pubblicate prima di ``inizio`` ma
+    ancora in sospeso a quella data: presa visione richiesta e non data, oppure
+    scadenza non ancora passata."""
     voci = []
     for c in bacheca:
         giorno = parse_data(c.data)
-        if giorno is None or not (inizio <= giorno <= fine):
+        if giorno is None or giorno > fine:
             continue
+        if giorno < inizio:
+            scadenza = parse_data(c.data_scadenza or "")
+            in_sospeso = in_sospeso_al is not None and (
+                (c.pv_richiesta and not c.is_presa_visione)
+                or (scadenza is not None and scadenza >= in_sospeso_al)
+            )
+            if not in_sospeso:
+                continue
         testo = c.messaggio
         if c.autore:
             testo += f" — {c.autore}"
@@ -410,11 +426,19 @@ def raccogli_fuori_classe(fuori_classe: list, inizio: date, fine: date) -> list[
     return voci
 
 
-def raccogli_bacheca_alunno(bacheca_alunno: list, inizio: date, fine: date) -> list[tuple[date, str, str]]:
+def raccogli_bacheca_alunno(
+    bacheca_alunno: list, inizio: date, fine: date, in_sospeso: bool = False
+) -> list[tuple[date, str, str]]:
+    """Allegati pubblicati tra ``inizio`` e ``fine``; con ``in_sospeso`` anche
+    quelli precedenti ancora da scaricare."""
     voci = []
     for f in bacheca_alunno:
         giorno = parse_data(f.data)
-        if giorno is None or not (inizio <= giorno <= fine):
+        if giorno is None or giorno > fine:
+            continue
+        if giorno < inizio and not (
+            in_sospeso and f.flg_download_genitore and not f.is_presa_visione
+        ):
             continue
         testo = f.messaggio if f.messaggio else f.nome_file
         if f.flg_download_genitore and not f.is_presa_visione:
@@ -631,6 +655,10 @@ def esegui(args: argparse.Namespace) -> None:
 
     inizio_voti, fine_voti = (args.dal, args.al) if (args.dal and args.al) else range_voti(oggi)
 
+    # Bacheca: ultimi 30 giorni come assenze/note (le comunicazioni hanno date
+    # passate); senza --dal/--al si aggiungono quelle più vecchie ancora in sospeso.
+    in_sospeso_al = None if (args.dal and args.al) else oggi
+
     sezioni: list[tuple[str, dict, str]] = []
 
     sezioni.append((
@@ -672,9 +700,9 @@ def esegui(args: argparse.Namespace) -> None:
         sezioni.append((
             "Bacheca",
             costruisci_sezione(
-                inizio_settimanale,
-                fine_settimanale,
-                raccogli_bacheca(bacheca, inizio_settimanale, fine_settimanale),
+                inizio_mensile,
+                fine_mensile,
+                raccogli_bacheca(bacheca, inizio_mensile, fine_mensile, in_sospeso_al),
                 args.per_materia,
                 "categoria",
             ),
@@ -720,9 +748,11 @@ def esegui(args: argparse.Namespace) -> None:
         sezioni.append((
             "Bacheca alunno",
             costruisci_sezione(
-                inizio_settimanale,
-                fine_settimanale,
-                raccogli_bacheca_alunno(bacheca_alunno_raw, inizio_settimanale, fine_settimanale),
+                inizio_mensile,
+                fine_mensile,
+                raccogli_bacheca_alunno(
+                    bacheca_alunno_raw, inizio_mensile, fine_mensile, in_sospeso_al is not None
+                ),
                 args.per_materia,
                 "categoria",
             ),
