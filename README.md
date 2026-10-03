@@ -206,6 +206,19 @@ Utile per script o automazioni: ogni sezione richiesta compare come chiave
 `dal`/`al`, il conteggio e l'elenco delle materie/docenti/categorie
 coinvolte, e `gruppi` con il dettaglio ordinato cronologicamente.
 
+## Test
+
+```bash
+.venv/bin/python -m unittest discover -v
+```
+
+I test non richiedono un account Argo: verificano le funzioni che filtrano e
+raggruppano i dati usando i modelli veri di `didupwrapper`. La versione della
+libreria è fissata in `requirements.txt` perché un suo aggiornamento potrebbe
+rinominare i campi usati dalla CLI; per aggiornarla, cambia la versione e
+controlla che i test passino. Una GitHub Action li esegue a ogni push e pull
+request.
+
 ## Alias da shell (opzionale)
 
 Per lanciarlo più velocemente, aggiungi in `~/.bash_aliases`:
