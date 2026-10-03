@@ -26,6 +26,8 @@ elettronico **Argo DidUp Famiglia**, senza passare dal browser o dall'app.
 - Ordinamento per giorno (default) o per materia/docente/categoria
   (`--per-materia`).
 - Output testuale leggibile o JSON (`--json`) per script/automazioni.
+- **Account genitore con più figli**: scelta dell'alunno con `--alunno`
+  (o `DIDUP_ALUNNO`), elenco con `--elenco-alunni`.
 - Le sezioni senza risultati vengono omesse dall'output testuale.
 
 ## Requisiti
@@ -158,6 +160,30 @@ CALLMEBOT_APIKEY=chiave1,chiave2
 
 Combinabile con qualsiasi altra opzione (usa il testo, non `--json`, se
 vuoi un messaggio leggibile).
+
+### Più figli con lo stesso account
+
+Con un account genitore collegato a più figli, Argo restituisce al login un
+profilo per ciascun figlio. `didupwrapper` (0.1.x) usa sempre il primo, quindi
+senza opzioni la CLI mostra solo quel figlio. Per vedere gli alunni collegati:
+
+```bash
+.venv/bin/python argo_cli.py --elenco-alunni
+```
+
+Per scegliere l'alunno (nome, nome e cognome o una sola parola del nominativo,
+maiuscole indifferenti):
+
+```bash
+.venv/bin/python argo_cli.py --alunno Mario --domani
+```
+
+In alternativa imposta `DIDUP_ALUNNO=Mario` in `.env.local`. Il nome scelto
+viene stampato su stderr, così l'output (anche `--json`) resta pulito.
+
+La scelta usa solo chiamate di lettura (`login` e `profilo`, le stesse che fa
+l'app all'avvio) e alcuni attributi privati di `didupwrapper`: se una versione
+futura li cambia, la CLI lo segnala con un errore esplicito.
 
 ### Ordinamento
 
