@@ -5,8 +5,11 @@ comunicazioni di bacheca, assenze e note disciplinari del registro
 elettronico **Argo DidUp Famiglia**, senza passare dal browser o dall'app.
 
 > ⚠️ **Disclaimer**: questo progetto non è affiliato con Argo Software e
-> non usa API pubbliche o documentate: Argo non ne offre per le famiglie.
-> Replica le chiamate dell'app ufficiale DidUp Famiglia (reverse
+> non usa API pubbliche per le famiglie: Argo non ne offre. L'unica API
+> documentata, [`argo-api`](https://www.portaleargo.it/argo-api/rest/)
+> (OpenAPI, autenticazione Bearer JWT), è riservata alle scuole e ai
+> gestionali e non espone voti, compiti, bacheca o assenze. La CLI replica
+> invece le chiamate dell'app ufficiale DidUp Famiglia (reverse
 > engineering del suo traffico, già noto da progetti come
 > [`didupwrapper`](https://github.com/Rocciadura/didupAPI-wrapper)).
 > Può smettere di funzionare in qualunque momento se Argo cambia il

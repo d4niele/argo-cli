@@ -83,6 +83,33 @@ class TestPrimitive(unittest.TestCase):
         self.assertIn("HTTP 500", str(e))
 
 
+class TestHttp(unittest.TestCase):
+    def test_user_agent_esplicito(self):
+        visto = {}
+
+        class Finta:
+            status = 200
+            headers = email.message.Message()
+
+            def read(self):
+                return b"{}"
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+        def apri(req, timeout=None):
+            visto.update(req.header_items())
+            return Finta()
+
+        with mock.patch.object(argo_api._opener, "open", apri):
+            argo_api._richiesta("GET", "https://x.test/", headers={"accept": "a"})
+        self.assertEqual(visto["User-agent"], argo_api.USER_AGENT)
+        self.assertEqual(visto["Accept"], "a")
+
+
 class TestLogin(unittest.TestCase):
     def client(self):
         return ArgoClient("SC1", "mario", "p&ss è", versione="9.9.9")
