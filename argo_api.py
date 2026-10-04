@@ -39,6 +39,8 @@ APP_BUNDLE_ID = "it.argosoft.didup.famiglia.new"
 APP_LOOKUP_URL = "https://itunes.apple.com/lookup"
 VERSIONE_DEFAULT = "1.29.2"
 DATA_INIZIO_DEFAULT = "2000-01-01 00:00:00.000"
+# Ci si identifica per quello che si è: non si finge di essere l'app.
+USER_AGENT = "argo-cli (+https://github.com/d4niele/argo-cli)"
 
 _ALFABETO = string.ascii_letters + string.digits
 
@@ -273,7 +275,8 @@ def _richiesta(
     """Esegue una richiesta senza seguire i redirect; restituisce (stato, header, corpo).
 
     Gli stati 4xx/5xx non sollevano: li interpreta il chiamante."""
-    req = urllib.request.Request(url, data=corpo, headers=headers or {}, method=metodo)
+    headers = {"user-agent": USER_AGENT, **(headers or {})}
+    req = urllib.request.Request(url, data=corpo, headers=headers, method=metodo)
     try:
         with _opener.open(req, timeout=timeout) as r:
             return r.status, r.headers, r.read()
