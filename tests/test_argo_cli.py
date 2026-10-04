@@ -369,14 +369,9 @@ class TestMain(unittest.TestCase):
         )
         dati.update(dashboard)
         client = mock.MagicMock()
-        client.__enter__.return_value = client
-        client.get_dashboard.return_value = types.SimpleNamespace(**dati)
-        client.get_registro.return_value = dati["registro"]
-        client.get_voti.return_value = dati["voti"]
-        client.get_promemoria.return_value = dati["promemoria"]
-        client.get_bacheca.return_value = dati["bacheca"]
+        client.dashboard.return_value = types.SimpleNamespace(**dati)
         uscita = io.StringIO()
-        with mock.patch.object(argo_cli, "DiDUPClientSync", return_value=client), \
+        with mock.patch.object(argo_cli, "ArgoClient", return_value=client), \
                 mock.patch.object(argo_cli, "date", _DataFissa), \
                 mock.patch.object(argo_cli, "carica_env_locale"), \
                 mock.patch.dict(os.environ, {"DIDUP_SCUOLA": "s", "DIDUP_USERNAME": "u", "DIDUP_PASSWORD": "p"}), \
