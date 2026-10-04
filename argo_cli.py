@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """CLI per consultare voti e compiti da Argo DidUp Famiglia.
 
-Usa la libreria non ufficiale ``didupwrapper`` (reverse engineering delle
-API usate dall'app ufficiale). Le credenziali vanno fornite tramite
+Usa le API non ufficiali dell'app (reverse engineering, vedi ``argo_api.py``),
+senza dipendenze esterne. Le credenziali vanno fornite tramite
 variabili d'ambiente (vedi README.md), mai passate come argomento da riga
 di comando per non finire nella history della shell.
 """
@@ -26,8 +26,7 @@ import urllib.request
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
-from didupwrapper import DiDUPClientSync
-from didupwrapper.exceptions import AuthError, DiDUPError
+from argo_api import ArgoAuthError, ArgoClient, ArgoError, Profilo
 
 ENV_FILE = Path(__file__).parent / ".env.local"
 
@@ -170,50 +169,6 @@ def invia_whatsapp(testo: str) -> None:
         sys.exit(1)
 
 
-def profili_account(didup: DiDUPClientSync) -> list[tuple[dict, dict]]:
-    """Restituisce una coppia (dati di login, alunno) per ogni alunno dell'account.
-
-    Con un account genitore e più figli il login applicativo (``POST login``)
-    restituisce un profilo per figlio, ognuno con il suo ``token``
-    (``x-auth-token``). didupwrapper 0.1.x tiene solo il primo (``data[0]``),
-    quindi gli altri figli restano irraggiungibili. Qui si ripete la stessa
-    chiamata ``login`` e, per ogni profilo, si legge il nome dell'alunno con
-    ``GET profilo`` (``data.alunno``). Sono le stesse chiamate di sola lettura
-    che fa l'app all'avvio.
-
-    Usa attributi privati del wrapper: se una versione futura li cambia,
-    l'errore viene segnalato in modo esplicito.
-    """
-    try:
-        client = didup._async
-        risposta = didup._run(
-            client._post(
-                "login",
-                json={
-                    "lista-opzioni-notifiche": "{}",
-                    "lista-x-auth-token": "[]",
-                    "clientID": "".join(
-                        secrets.choice(string.ascii_letters + string.digits) for _ in range(163)
-                    ),
-                },
-            )
-        )
-        client._verifica_success(risposta)
-        profili = []
-        for voce in (risposta or {}).get("data") or []:
-            if voce.get("profiloDisabilitato"):
-                continue
-            client._login_data = voce
-            dati = didup._run(client._get("profilo"))
-            alunno = ((dati or {}).get("data") or {}).get("alunno") or {}
-            profili.append((voce, alunno))
-        return profili
-    except AttributeError as exc:
-        raise DiDUPError(
-            f"versione di didupwrapper non supportata per la scelta dell'alunno ({exc})"
-        ) from exc
-
-
 def nome_alunno(alunno: dict) -> str:
     return alunno.get("nominativo") or f"{alunno.get('cognome', '')} {alunno.get('nome', '')}".strip()
 
@@ -230,18 +185,15 @@ def corrisponde(alunno: dict, cercato: str) -> bool:
     )
 
 
-def seleziona_alunno(didup: DiDUPClientSync, cercato: str) -> str:
-    """Rende attivo il profilo dell'alunno ``cercato``; restituisce il suo nome."""
-    profili = profili_account(didup)
-    scelti = [(voce, alunno) for voce, alunno in profili if corrisponde(alunno, cercato)]
+def seleziona_alunno(client: ArgoClient, cercato: str) -> Profilo:
+    """Restituisce il profilo dell'alunno ``cercato`` (deve essere uno solo)."""
+    profili = client.profili()
+    scelti = [p for p in profili if corrisponde(p.alunno, cercato)]
     if len(scelti) != 1:
-        nomi = ", ".join(nome_alunno(a) for _, a in profili) or "nessuno"
+        nomi = ", ".join(nome_alunno(p.alunno) for p in profili) or "nessuno"
         motivo = "nessun alunno" if not scelti else "più alunni"
-        raise DiDUPError(f"{motivo} corrisponde a '{cercato}' (alunni dell'account: {nomi})")
-    voce, alunno = scelti[0]
-    didup._async._login_data = voce
-    didup.invalida_cache()
-    return nome_alunno(alunno)
+        raise ArgoError(f"{motivo} corrisponde a '{cercato}' (alunni dell'account: {nomi})")
+    return scelti[0]
 
 
 def parse_data(testo: str) -> date | None:
@@ -443,7 +395,6 @@ def raccogli_assenze(assenze: list, inizio: date, fine: date) -> list[tuple[date
         giorno = parse_data(a.data)
         if giorno is None or not (inizio <= giorno <= fine):
             continue
-        testo = a.descrizione
         extra = []
         if a.da_giustificare:
             extra.append("da giustificare")
@@ -451,8 +402,7 @@ def raccogli_assenze(assenze: list, inizio: date, fine: date) -> list[tuple[date
             extra.append("giustificata")
         if a.nota:
             extra.append(a.nota)
-        if extra:
-            testo += " (" + "; ".join(extra) + ")"
+        testo = "; ".join(extra) if extra else a.descrizione or "—"
         if a.docente:
             testo += f" — {a.docente}"
         voci.append((giorno, a.descrizione or "Evento", testo))
@@ -630,6 +580,8 @@ def main() -> None:
         args.note = True
 
     if args.domani:
+        if args.all:
+            parser.error("--domani non è combinabile con --all")
         if args.dal or args.al:
             parser.error("--domani non è combinabile con --dal/--al")
         args.dal = args.al = date.today() + timedelta(days=1)
@@ -658,44 +610,40 @@ def esegui(args: argparse.Namespace) -> None:
     args.alunno = args.alunno or os.environ.get("DIDUP_ALUNNO")
 
     try:
-        with DiDUPClientSync(scuola, utente, password, auto_versione=True) as didup:
-            if args.elenco_alunni:
-                for _, alunno in profili_account(didup):
-                    print(nome_alunno(alunno))
-                return
-            if args.alunno:
-                print(f"Alunno: {seleziona_alunno(didup, args.alunno)}", file=sys.stderr)
-            if args.all:
-                dashboard = didup.get_dashboard()
-                voti = dashboard.voti
-                registro = dashboard.registro
-                promemoria = dashboard.promemoria
-                bacheca = dashboard.bacheca
-                assenze = dashboard.appello
-                note = dashboard.note_disciplinari
-                fuori_classe_raw = dashboard.fuori_classe
-                bacheca_alunno_raw = dashboard.bacheca_alunno
-                docenti_raw = dashboard.lista_docenti_classe
-                periodi_raw = dashboard.lista_periodi
-                media_generale = dashboard.media_generale
-            else:
-                voti = [] if args.domani else didup.get_voti()
-                registro = didup.get_registro()
-                promemoria = didup.get_promemoria() if args.promemoria else []
-                bacheca = didup.get_bacheca() if args.bacheca else []
-                assenze = didup.get_assenze() if args.assenze else []
-                note = didup.get_note_disciplinari() if args.note else []
-                fuori_classe_raw = []
-                bacheca_alunno_raw = []
-                docenti_raw = []
-                periodi_raw = []
-                media_generale = None
-    except AuthError:
+        client = ArgoClient(scuola, utente, password)
+        client.login()
+        if args.elenco_alunni:
+            for profilo in client.profili():
+                print(nome_alunno(profilo.alunno))
+            return
+        voce = None
+        if args.alunno:
+            profilo = seleziona_alunno(client, args.alunno)
+            voce = profilo.voce
+            print(f"Alunno: {nome_alunno(profilo.alunno)}", file=sys.stderr)
+        dashboard = client.dashboard(voce)
+    except ArgoAuthError:
         print("Credenziali non valide o accesso rifiutato.", file=sys.stderr)
         sys.exit(1)
-    except DiDUPError as exc:
+    except ArgoError as exc:
         print(f"Errore nella comunicazione con Argo: {exc}", file=sys.stderr)
         sys.exit(1)
+
+    registro = dashboard.registro
+    voti = [] if args.domani else dashboard.voti
+    promemoria = dashboard.promemoria if args.promemoria else []
+    bacheca = dashboard.bacheca if args.bacheca else []
+    assenze = dashboard.appello if args.assenze else []
+    note = dashboard.note_disciplinari if args.note else []
+    if args.all:
+        fuori_classe_raw = dashboard.fuori_classe
+        bacheca_alunno_raw = dashboard.bacheca_alunno
+        docenti_raw = dashboard.lista_docenti_classe
+        periodi_raw = dashboard.lista_periodi
+        media_generale = dashboard.media_generale
+    else:
+        fuori_classe_raw = bacheca_alunno_raw = docenti_raw = periodi_raw = []
+        media_generale = None
 
     oggi = date.today()
 

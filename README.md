@@ -5,9 +5,10 @@ comunicazioni di bacheca, assenze e note disciplinari del registro
 elettronico **Argo DidUp Famiglia**, senza passare dal browser o dall'app.
 
 > ⚠️ **Disclaimer**: questo progetto non è affiliato con Argo Software e
-> non usa API pubbliche/documentate. Si appoggia alla libreria di terze
-> parti [`didupwrapper`](https://github.com/Rocciadura/didupAPI-wrapper),
-> ottenuta per reverse engineering del traffico dell'app ufficiale.
+> non usa API pubbliche o documentate: Argo non ne offre per le famiglie.
+> Replica le chiamate dell'app ufficiale DidUp Famiglia (reverse
+> engineering del suo traffico, già noto da progetti come
+> [`didupwrapper`](https://github.com/Rocciadura/didupAPI-wrapper)).
 > Può smettere di funzionare in qualunque momento se Argo cambia il
 > backend. Usalo solo con le tue credenziali e sotto la tua responsabilità.
 
@@ -33,7 +34,7 @@ elettronico **Argo DidUp Famiglia**, senza passare dal browser o dall'app.
 
 ## Requisiti
 
-- Python 3.10+
+- Python 3.10+ (solo libreria standard, nessun pacchetto da installare)
 - Le credenziali dell'app DidUp Famiglia (codice scuola, utente, password)
 
 ## Installazione
@@ -43,19 +44,7 @@ git clone <url-di-questo-repo>
 cd argo-cli
 ```
 
-Con **virtualenvwrapper** (consigliato):
-
-```bash
-mkvirtualenv argo
-pip install -r requirements.txt
-```
-
-In alternativa con venv standard:
-
-```bash
-python3 -m venv .venv
-.venv/bin/pip install -r requirements.txt
-```
+Non ci sono dipendenze da installare: serve solo Python.
 
 ## Configurazione
 
@@ -80,7 +69,7 @@ committarlo mai** e non incollare la password in chat, issue o commit.
 ## Uso
 
 ```bash
-.venv/bin/python argo_cli.py
+python3 argo_cli.py
 ```
 
 Mostra compiti (settimana corrente) e voti (ultimi 7 giorni).
@@ -97,13 +86,13 @@ Mostra compiti (settimana corrente) e voti (ultimi 7 giorni).
 Combinabili tra loro:
 
 ```bash
-.venv/bin/python argo_cli.py --promemoria --bacheca --assenze --note
+python3 argo_cli.py --promemoria --bacheca --assenze --note
 ```
 
 ### Tutto in una volta
 
 ```bash
-.venv/bin/python argo_cli.py --all
+python3 argo_cli.py --all
 ```
 
 Abilita tutte le sezioni opzionali (i promemoria si possono comunque escludere
@@ -116,14 +105,14 @@ più gli allegati precedenti ancora da scaricare).
 Combinabile con `--json`, `--per-materia` e `--dal`/`--al`:
 
 ```bash
-.venv/bin/python argo_cli.py --all --json
-.venv/bin/python argo_cli.py --all --dal 01-09-2026 --al 30-09-2026
+python3 argo_cli.py --all --json
+python3 argo_cli.py --all --dal 01-09-2026 --al 30-09-2026
 ```
 
 ### Intervallo di date personalizzato
 
 ```bash
-.venv/bin/python argo_cli.py --dal 01-09-2026 --al 30-09-2026
+python3 argo_cli.py --dal 01-09-2026 --al 30-09-2026
 ```
 
 `--dal` e `--al` vanno usati insieme, formato `DD-MM-YYYY`, e sovrascrivono
@@ -133,7 +122,7 @@ mostra solo le comunicazioni pubblicate in quei giorni.
 ### Solo domani
 
 ```bash
-.venv/bin/python argo_cli.py --domani
+python3 argo_cli.py --domani
 ```
 
 Mostra solo i compiti da consegnare domani (nessun'altra sezione). Aggiungi
@@ -143,7 +132,7 @@ Combinabile con `--json` e `--per-materia`; non con `--dal`/`--al`.
 ### Invio via WhatsApp
 
 ```bash
-.venv/bin/python argo_cli.py --domani --whatsapp
+python3 argo_cli.py --domani --whatsapp
 ```
 
 Stampa l'output e lo invia anche via WhatsApp con [CallMeBot](https://www.callmebot.com/blog/free-api-whatsapp-messages/)
@@ -176,26 +165,25 @@ parti numerate `(1/3)`, `(2/3)`… inviate a qualche secondo di distanza.
 ### Più figli con lo stesso account
 
 Con un account genitore collegato a più figli, Argo restituisce al login un
-profilo per ciascun figlio. `didupwrapper` (0.1.x) usa sempre il primo, quindi
-senza opzioni la CLI mostra solo quel figlio. Per vedere gli alunni collegati:
+profilo per ciascun figlio. Senza opzioni la CLI usa il primo, quindi
+mostra solo quel figlio. Per vedere gli alunni collegati:
 
 ```bash
-.venv/bin/python argo_cli.py --elenco-alunni
+python3 argo_cli.py --elenco-alunni
 ```
 
 Per scegliere l'alunno (nome, nome e cognome o una sola parola del nominativo,
 maiuscole indifferenti):
 
 ```bash
-.venv/bin/python argo_cli.py --alunno Mario --domani
+python3 argo_cli.py --alunno Mario --domani
 ```
 
 In alternativa imposta `DIDUP_ALUNNO=Mario` in `.env.local`. Il nome scelto
 viene stampato su stderr, così l'output (anche `--json`) resta pulito.
 
 La scelta usa solo chiamate di lettura (`login` e `profilo`, le stesse che fa
-l'app all'avvio) e alcuni attributi privati di `didupwrapper`: se una versione
-futura li cambia, la CLI lo segnala con un errore esplicito.
+l'app all'avvio).
 
 ### Ordinamento
 
@@ -204,13 +192,13 @@ per materia (compiti/voti), docente (promemoria/note) o categoria
 (bacheca/assenze):
 
 ```bash
-.venv/bin/python argo_cli.py --per-materia
+python3 argo_cli.py --per-materia
 ```
 
 ### Output JSON
 
 ```bash
-.venv/bin/python argo_cli.py --json
+python3 argo_cli.py --json
 ```
 
 Utile per script o automazioni: ogni sezione richiesta compare come chiave
@@ -218,33 +206,37 @@ Utile per script o automazioni: ogni sezione richiesta compare come chiave
 `dal`/`al`, il conteggio e l'elenco delle materie/docenti/categorie
 coinvolte, e `gruppi` con il dettaglio ordinato cronologicamente.
 
+## Come funziona
+
+Il client è in [`argo_api.py`](argo_api.py) e usa solo `urllib`. Replica le
+stesse chiamate dell'app:
+
+1. login OAuth2 con PKCE sul SSO di Argo (codice scuola, utente e password);
+2. `login` applicativo, che restituisce un profilo per ogni alunno
+   dell'account;
+3. `dashboard/dashboard`, una sola richiesta che contiene voti, registro,
+   promemoria, bacheca, assenze e note.
+
+[`argo_cli.py`](argo_cli.py) filtra e raggruppa questi dati. Se Argo cambia
+il flusso di login o i nomi dei campi, il codice da aggiornare è solo
+`argo_api.py`.
+
 ## Test
 
 ```bash
-.venv/bin/python -m unittest discover -v
+python3 -m unittest discover -v
 ```
 
-I test non richiedono un account Argo: verificano le funzioni che filtrano e
-raggruppano i dati usando i modelli veri di `didupwrapper`. La versione della
-libreria è fissata in `requirements.txt` perché un suo aggiornamento potrebbe
-rinominare i campi usati dalla CLI; per aggiornarla, cambia la versione e
-controlla che i test passino. Una GitHub Action li esegue a ogni push e pull
-request.
+I test non richiedono un account Argo né la rete: verificano le funzioni che
+filtrano e raggruppano i dati, e il client (`argo_api.py`) con le risposte di
+Argo simulate. Una GitHub Action li esegue a ogni push e pull request.
 
 ## Alias da shell (opzionale)
 
 Per lanciarlo più velocemente, aggiungi in `~/.bash_aliases`:
 
-Con **virtualenvwrapper**:
-
 ```bash
-alias didup="$HOME/.virtualenvs/argo/bin/python $HOME/projects/argo-cli/argo_cli.py"
-```
-
-Con **venv standard**:
-
-```bash
-alias didup='/percorso/assoluto/argo-cli/.venv/bin/python /percorso/assoluto/argo-cli/argo_cli.py'
+alias didup='python3 /percorso/assoluto/argo-cli/argo_cli.py'
 ```
 
 Poi, da un nuovo terminale:
