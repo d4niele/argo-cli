@@ -1,7 +1,7 @@
 """Test delle funzioni pure di argo_cli (nessun account né rete necessari).
 
-Gli oggetti in ingresso sono i modelli veri di ``didupwrapper``: se una nuova
-versione rinomina un campo usato dalla CLI, i test falliscono.
+Gli oggetti in ingresso sono i modelli di ``argo_api``: se si rinomina un
+campo usato dalla CLI, i test falliscono.
 """
 
 import argparse
@@ -16,7 +16,7 @@ from datetime import date
 from pathlib import Path
 from unittest import mock
 
-from didupwrapper.models import (
+from argo_api import (
     Compito,
     ComunicazioneBacheca,
     Docente,
@@ -218,7 +218,7 @@ class TestRaccogli(unittest.TestCase):
         ]
         self.assertEqual(
             argo_cli.raccogli_assenze(assenze, LUNEDI, DOMENICA),
-            [(date(2026, 10, 6), "Assenza", "Assenza (da giustificare) — Rossi")],
+            [(date(2026, 10, 6), "Assenza", "da giustificare — Rossi")],
         )
 
     def test_note(self):
