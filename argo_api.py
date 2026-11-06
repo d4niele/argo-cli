@@ -26,6 +26,7 @@ import urllib.parse
 import urllib.request
 from dataclasses import MISSING, dataclass, field, fields
 from datetime import datetime
+from html.parser import HTMLParser
 from typing import Any, Callable
 
 API_BASE_URL = "https://www.portaleargo.it/appfamiglia/api/rest/"
@@ -260,6 +261,19 @@ class _SenzaRedirect(urllib.request.HTTPRedirectHandler):
         return None
 
 
+class _RedirectApp(HTMLParser):
+    """Link di continuazione della pagina SSO «Accesso completato»."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.url: str | None = None
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        attributi = dict(attrs)
+        if tag == "a" and "data-auth-app-redirect" in attributi:
+            self.url = attributi.get("href")
+
+
 # Niente HTTPCookieProcessor: i cookie del flusso SSO si gestiscono a mano.
 _opener = urllib.request.build_opener(_SenzaRedirect)
 
@@ -428,10 +442,24 @@ class ArgoClient:
         # 3) Redirect post-login (il secondo passo non invia cookie, come l'app).
         def passo(url: str, cookie: bool, nome: str) -> str:
             headers = {"cookie": "; ".join(cookies)} if cookie else {}
-            _, h, _ = _richiesta("GET", url, headers=headers, timeout=t)
+            stato, h, corpo = _richiesta("GET", url, headers=headers, timeout=t)
             if cookie:
                 cookies.extend(_cookie(h))
             prossimo = h.get("Location")
+            # Il SSO può completare l'accesso con una pagina HTML invece
+            # di un 302. Seguiamo lo stesso link usato dal pulsante Continua,
+            # senza eseguire JavaScript né accettare destinazioni arbitrarie.
+            pagina = urllib.parse.urlsplit(url)
+            if (not prossimo and stato == 200
+                    and pagina.scheme == "https" and pagina.netloc == "www.portaleargo.it"
+                    and pagina.path.rstrip("/") == "/auth/sso/consent"):
+                parser = _RedirectApp()
+                parser.feed(corpo.decode("utf-8", errors="replace"))
+                if parser.url:
+                    destinazione = urllib.parse.urlsplit(urllib.parse.urljoin(url, parser.url))
+                    if (destinazione.scheme == "https" and destinazione.netloc == "auth.portaleargo.it"
+                            and destinazione.path == "/oauth2/auth"):
+                        prossimo = destinazione.geturl()
             if not prossimo:
                 raise ArgoError(f"catena OAuth interrotta ({nome})")
             return urllib.parse.urljoin(url, prossimo)

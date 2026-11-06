@@ -164,6 +164,40 @@ class TestLogin(unittest.TestCase):
             with self.assertRaises(ArgoAuthError):
                 self.client().login()
 
+    def test_continuazione_html_sso(self):
+        sequenza = [
+            risposta(302, location="https://auth/login?login_challenge=CH", cookie=["a=1"]),
+            risposta(302, location="https://auth.portaleargo.it/oauth2/auth?login_verifier=L"),
+            risposta(302, location="https://www.portaleargo.it/auth/sso/consent/?consent_challenge=C"),
+            risposta(200, b'''<a href="https://auth.portaleargo.it/oauth2/auth?consent_verifier=V&amp;state=S"
+                data-auth-app-redirect>Continua</a>'''),
+            risposta(303, location=argo_api.REDIRECT_URI + "?code=CODE"),
+        ]
+        with mock.patch.object(argo_api, "_richiesta", side_effect=sequenza) as http:
+            self.assertEqual(self.client()._ottieni_code("verifier"), "CODE")
+        self.assertEqual(http.call_args.args, (
+            "GET", "https://auth.portaleargo.it/oauth2/auth?consent_verifier=V&state=S"))
+        self.assertEqual(http.call_args.kwargs["headers"], {"cookie": "a=1"})
+
+    def test_continuazione_html_non_valida(self):
+        for link in (
+            '<a href="https://auth.portaleargo.it/oauth2/auth">Continua</a>',
+            '<a data-auth-app-redirect href="https://evil.test/oauth2/auth">Continua</a>',
+            '<a data-auth-app-redirect href="http://auth.portaleargo.it/oauth2/auth">Continua</a>',
+            '<a data-auth-app-redirect href="https://auth.portaleargo.it/altro">Continua</a>',
+        ):
+            with self.subTest(link=link):
+                sequenza = [
+                    risposta(302, location="https://auth/login?login_challenge=CH"),
+                    risposta(302, location="https://auth.portaleargo.it/oauth2/auth"),
+                    risposta(302, location="https://www.portaleargo.it/auth/sso/consent/"),
+                    risposta(200, link.encode()),
+                ]
+                with mock.patch.object(argo_api, "_richiesta", side_effect=sequenza) as http:
+                    with self.assertRaisesRegex(ArgoError, "redirect 3"):
+                        self.client()._ottieni_code("verifier")
+                self.assertEqual(http.call_count, 4)
+
     def test_catena_interrotta(self):
         sequenza = [
             risposta(302, location="https://auth/login?login_challenge=CH"),
