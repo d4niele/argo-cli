@@ -7,8 +7,12 @@ documentazione pubblica) usando solo la libreria standard:
 2. ``POST www.portaleargo.it/auth/sso/login``  -> credenziali, redirect
 3. catena di 3 redirect fino a ``?code=...``   (OAuth2 + PKCE S256)
 4. ``POST auth.portaleargo.it/oauth2/token``   -> ``access_token``
-5. ``POST appfamiglia/api/rest/login``         -> un profilo per alunno (``x-auth-token``)
-6. ``POST appfamiglia/api/rest/dashboard/dashboard`` -> tutti i dati in una sola risposta
+5. ``POST famiglia/api/login``                 -> un profilo per alunno (``x-auth-token``)
+6. ``POST famiglia/api/dashboard/dashboard``   -> tutti i dati in una sola risposta
+
+Dal 17/11/2026 il vecchio backend ``www.portaleargo.it/appfamiglia/api/rest/``
+risponde 503 ai client non ufficiali; si usa la nuova API Famiglia su
+``didattica.portaleargo.it`` (stesso token OAuth, ``login`` con corpo ``{}``).
 
 Se Argo cambia il flusso o i nomi dei campi, questo è l'unico modulo da aggiornare.
 """
@@ -29,7 +33,7 @@ from datetime import datetime
 from html.parser import HTMLParser
 from typing import Any, Callable
 
-API_BASE_URL = "https://www.portaleargo.it/appfamiglia/api/rest/"
+API_BASE_URL = "https://didattica.portaleargo.it/famiglia/api/"
 OAUTH_AUTH_URL = "https://auth.portaleargo.it/oauth2/auth"
 OAUTH_TOKEN_URL = "https://auth.portaleargo.it/oauth2/token"
 SSO_LOGIN_URL = "https://www.portaleargo.it/auth/sso/login"
@@ -502,15 +506,7 @@ class ArgoClient:
         self._scade_il = time.time() + float(scadenza) if scadenza else None
 
     def _login_applicativo(self) -> list[dict]:
-        risposta = self._api(
-            "POST",
-            "login",
-            {
-                "lista-opzioni-notifiche": "{}",
-                "lista-x-auth-token": "[]",
-                "clientID": _casuale(163),
-            },
-        )
+        risposta = self._api("POST", "login", {})
         voci = (risposta or {}).get("data") or []
         if not voci:
             raise ArgoError("login applicativo: nessun profilo restituito")
