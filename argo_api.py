@@ -316,7 +316,9 @@ def _messaggio(payload: Any, stato: int) -> str:
             valore = payload.get(chiave)
             if isinstance(valore, str) and valore.strip():
                 return valore
-    return f"richiesta fallita (HTTP {stato})"
+    if stato >= 500:
+        return "servizio Argo non disponibile, riprova più tardi"
+    return "richiesta fallita"
 
 
 def _errore(stato: int, payload: Any) -> ArgoError:

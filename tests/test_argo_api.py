@@ -109,6 +109,15 @@ class TestHttp(unittest.TestCase):
         self.assertEqual(visto["User-agent"], argo_api.USER_AGENT)
         self.assertEqual(visto["Accept"], "a")
 
+    def test_messaggi_errore(self):
+        self.assertEqual(str(argo_api._errore(400, None)), "richiesta fallita (HTTP 400)")
+        self.assertEqual(
+            str(argo_api._errore(503, b"<html>")),
+            "servizio Argo non disponibile, riprova più tardi (HTTP 503)",
+        )
+        self.assertEqual(str(argo_api._errore(401, {"msg": "no"})), "no (HTTP 401)")
+        self.assertIsInstance(argo_api._errore(403, None), ArgoAuthError)
+
 
 class TestLogin(unittest.TestCase):
     def client(self):
